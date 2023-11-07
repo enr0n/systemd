@@ -11129,6 +11129,8 @@ node /org/freedesktop/systemd1/unit/session_2d1_2escope {
       readonly t RuntimeRandomizedExtraUSec = ...;
       @org.freedesktop.DBus.Property.EmitsChangedSignal("const")
       readonly s OOMPolicy = '...';
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("const")
+      readonly t RuntimeDeadline = ...;
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly s Slice = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
@@ -11342,6 +11344,8 @@ node /org/freedesktop/systemd1/unit/session_2d1_2escope {
     <!--property RuntimeRandomizedExtraUSec is not documented!-->
 
     <!--property OOMPolicy is not documented!-->
+
+    <!--property RuntimeDeadline is not documented!-->
 
     <!--property Slice is not documented!-->
 
@@ -11562,6 +11566,8 @@ node /org/freedesktop/systemd1/unit/session_2d1_2escope {
     <variablelist class="dbus-property" generated="True" extra-ref="RuntimeRandomizedExtraUSec"/>
 
     <variablelist class="dbus-property" generated="True" extra-ref="OOMPolicy"/>
+
+    <variablelist class="dbus-property" generated="True" extra-ref="RuntimeDeadline"/>
 
     <variablelist class="dbus-property" generated="True" extra-ref="Slice"/>
 
@@ -12135,7 +12141,8 @@ $ gdbus introspect --system --dest org.freedesktop.systemd1 \
       <varname>MemoryZSwapCurrent</varname> were added in version 255.</para>
       <para><varname>EffectiveMemoryHigh</varname>,
       <varname>EffectiveMemoryMax</varname>,
-      <varname>EffectiveTasksMax</varname> were added in version 256.</para>
+      <varname>EffectiveTasksMax</varname>,
+      <para><varname>RuntimeDeadline</varname> were added in version 256.</para>
     </refsect2>
     <refsect2>
       <title>Job Objects</title>

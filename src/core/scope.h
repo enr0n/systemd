@@ -41,6 +41,9 @@ struct Scope {
         char *group;
 
         OOMPolicy oom_policy;
+
+        sd_event_source *deadline_event_source;
+        usec_t runtime_deadline;
 };
 
 extern const UnitVTable scope_vtable;

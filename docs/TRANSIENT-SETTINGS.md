@@ -404,6 +404,7 @@ such).
 ✓ RuntimeMaxSec=
 ✓ RuntimeRandomizedExtraSec=
 ✓ TimeoutStopSec=
+✓ RuntimeDeadline=
 ```
 
 ## Socket Unit Settings

@@ -51,6 +51,7 @@ const sd_bus_vtable bus_scope_vtable[] = {
         SD_BUS_PROPERTY("RuntimeMaxUSec", "t", bus_property_get_usec, offsetof(Scope, runtime_max_usec), SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("RuntimeRandomizedExtraUSec", "t", bus_property_get_usec, offsetof(Scope, runtime_rand_extra_usec), SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_PROPERTY("OOMPolicy", "s", bus_property_get_oom_policy, offsetof(Scope, oom_policy), SD_BUS_VTABLE_PROPERTY_CONST),
+        SD_BUS_PROPERTY("RuntimeDeadline", "t", bus_property_get_usec, offsetof(Scope, runtime_deadline), SD_BUS_VTABLE_PROPERTY_CONST),
         SD_BUS_SIGNAL("RequestStop", NULL, 0),
         SD_BUS_METHOD("Abandon", NULL, NULL, bus_scope_method_abandon, SD_BUS_VTABLE_UNPRIVILEGED),
         SD_BUS_VTABLE_END
@@ -80,6 +81,9 @@ static int bus_scope_set_transient_property(
 
         if (streq(name, "RuntimeRandomizedExtraUSec"))
                 return bus_set_transient_usec(u, name, &s->runtime_rand_extra_usec, message, flags, error);
+
+        if (streq(name, "RuntimeDeadline"))
+                return bus_set_transient_usec(u, name, &s->runtime_deadline, message, flags, error);
 
         if (streq(name, "OOMPolicy"))
                 return bus_set_transient_oom_policy(u, name, &s->oom_policy, message, flags, error);

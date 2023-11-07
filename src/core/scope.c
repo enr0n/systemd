@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
 #include <errno.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "alloc-util.h"
@@ -33,6 +34,7 @@ static const UnitActiveState state_translation_table[_SCOPE_STATE_MAX] = {
 };
 
 static int scope_dispatch_timer(sd_event_source *source, usec_t usec, void *userdata);
+static int scope_dispatch_deadline(sd_event_source *source, usec_t usec, void *userdata);
 
 static void scope_init(Unit *u) {
         Scope *s = SCOPE(u);
@@ -45,6 +47,7 @@ static void scope_init(Unit *u) {
         u->ignore_on_isolate = true;
         s->user = s->group = NULL;
         s->oom_policy = _OOM_POLICY_INVALID;
+        s->runtime_deadline = USEC_INFINITY;
 }
 
 static void scope_done(Unit *u) {
@@ -56,6 +59,7 @@ static void scope_done(Unit *u) {
         s->controller_track = sd_bus_track_unref(s->controller_track);
 
         s->timer_event_source = sd_event_source_disable_unref(s->timer_event_source);
+        s->deadline_event_source = sd_event_source_disable_unref(s->deadline_event_source);
 
         s->user = mfree(s->user);
         s->group = mfree(s->group);
@@ -79,7 +83,17 @@ static usec_t scope_running_timeout(Scope *s) {
 static int scope_arm_timer(Scope *s, bool relative, usec_t usec) {
         assert(s);
 
-        return unit_arm_timer(UNIT(s), &s->timer_event_source, relative, usec, scope_dispatch_timer);
+        return unit_arm_timer(UNIT(s), &s->timer_event_source, relative, usec, scope_dispatch_timer, CLOCK_MONOTONIC);
+}
+
+static int scope_set_deadline(Scope *s, bool clear) {
+        usec_t usec;
+
+        assert(s);
+
+        usec = clear ? USEC_INFINITY : map_clock_usec(s->runtime_deadline, CLOCK_REALTIME, CLOCK_BOOTTIME);
+
+        return unit_arm_timer(UNIT(s), &s->deadline_event_source, /* relative= */ false, usec, scope_dispatch_deadline, CLOCK_BOOTTIME);
 }
 
 static void scope_set_state(Scope *s, ScopeState state) {
@@ -92,8 +106,10 @@ static void scope_set_state(Scope *s, ScopeState state) {
         old_state = s->state;
         s->state = state;
 
-        if (!IN_SET(state, SCOPE_STOP_SIGTERM, SCOPE_STOP_SIGKILL, SCOPE_START_CHOWN, SCOPE_RUNNING))
+        if (!IN_SET(state, SCOPE_STOP_SIGTERM, SCOPE_STOP_SIGKILL, SCOPE_START_CHOWN, SCOPE_RUNNING)) {
                 s->timer_event_source = sd_event_source_disable_unref(s->timer_event_source);
+                s->deadline_event_source = sd_event_source_disable_unref(s->deadline_event_source);
+        }
 
         if (!IN_SET(old_state, SCOPE_DEAD, SCOPE_FAILED) && IN_SET(state, SCOPE_DEAD, SCOPE_FAILED)) {
                 unit_unwatch_all_pids(UNIT(s));
@@ -240,6 +256,10 @@ static int scope_coldplug(Unit *u) {
         if (r < 0)
                 return r;
 
+        r = scope_set_deadline(s, /* clear= */ s->deserialized_state != SCOPE_RUNNING);
+        if (r < 0)
+                return r;
+
         if (!IN_SET(s->deserialized_state, SCOPE_DEAD, SCOPE_FAILED)) {
                 if (u->pids) {
                         PidRef *pid;
@@ -270,12 +290,14 @@ static void scope_dump(Unit *u, FILE *f, const char *prefix) {
                 "%sResult: %s\n"
                 "%sRuntimeMaxSec: %s\n"
                 "%sRuntimeRandomizedExtraSec: %s\n"
-                "%sOOMPolicy: %s\n",
+                "%sOOMPolicy: %s\n"
+                "%sRuntimeDeadline: %s\n",
                 prefix, scope_state_to_string(s->state),
                 prefix, scope_result_to_string(s->result),
                 prefix, FORMAT_TIMESPAN(s->runtime_max_usec, USEC_PER_SEC),
                 prefix, FORMAT_TIMESPAN(s->runtime_rand_extra_usec, USEC_PER_SEC),
-                prefix, oom_policy_to_string(s->oom_policy));
+                prefix, oom_policy_to_string(s->oom_policy),
+                prefix, FORMAT_TIMESTAMP(s->runtime_deadline));
 
         cgroup_context_dump(UNIT(s), f, prefix);
         kill_context_dump(&s->kill_context, f, prefix);
@@ -406,6 +428,7 @@ static int scope_enter_start_chown(Scope *s) {
         return 1;
 fail:
         s->timer_event_source = sd_event_source_disable_unref(s->timer_event_source);
+        s->deadline_event_source = sd_event_source_disable_unref(s->deadline_event_source);
         return r;
 }
 
@@ -439,7 +462,17 @@ static int scope_enter_running(Scope *s) {
         scope_set_state(s, SCOPE_RUNNING);
 
         /* Set the maximum runtime timeout. */
-        scope_arm_timer(s, /* relative= */ false, scope_running_timeout(s));
+        r = scope_arm_timer(s, /* relative= */ false, scope_running_timeout(s));
+        if (r < 0) {
+                log_unit_warning_errno(u, r, "Failed to set scope's runtime timeout: %m");
+                goto fail;
+        }
+
+        r = scope_set_deadline(s, /* clear= */ false);
+        if (r < 0) {
+                log_unit_warning_errno(u, r, "Failed to set scope's runtime deadline: %m");
+                goto fail;
+        }
 
         /* On unified we use proper notifications hence we can unwatch the PIDs
          * we just attached to the scope. This can also be done on legacy as
@@ -517,12 +550,25 @@ static int scope_get_timeout(Unit *u, usec_t *timeout) {
         usec_t t;
         int r;
 
-        if (!s->timer_event_source)
+        if (!s->timer_event_source && !s->deadline_event_source)
                 return 0;
 
-        r = sd_event_source_get_time(s->timer_event_source, &t);
-        if (r < 0)
-                return r;
+        if (s->timer_event_source) {
+                r = sd_event_source_get_time(s->timer_event_source, &t);
+                if (r < 0)
+                        return r;
+        }
+
+        if (s->deadline_event_source) {
+                usec_t d;
+
+                r = sd_event_source_get_time(s->deadline_event_source, &d);
+                if (r < 0)
+                        return r;
+
+                t = MIN(t, d);
+        }
+
         if (t == USEC_INFINITY)
                 return 0;
 
@@ -695,6 +741,19 @@ static int scope_dispatch_timer(sd_event_source *source, usec_t usec, void *user
         default:
                 assert_not_reached();
         }
+
+        return 0;
+}
+
+static int scope_dispatch_deadline(sd_event_source *source, usec_t usec, void *userdata) {
+        Scope *s = SCOPE(userdata);
+
+        assert(s);
+        assert(s->deadline_event_source == source);
+        assert(s->state == SCOPE_RUNNING);
+
+        log_unit_warning(UNIT(s), "Scope reached runtime deadline. Stopping.");
+        scope_enter_signal(s, SCOPE_STOP_SIGTERM, SCOPE_FAILURE_TIMEOUT);
 
         return 0;
 }

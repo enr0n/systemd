@@ -587,6 +587,7 @@ Scope.RuntimeMaxSec,                     config_parse_sec,                      
 Scope.RuntimeRandomizedExtraSec,         config_parse_sec,                            0,                                  offsetof(Scope, runtime_rand_extra_usec)
 Scope.TimeoutStopSec,                    config_parse_sec,                            0,                                  offsetof(Scope, timeout_stop_usec)
 Scope.OOMPolicy,                         config_parse_oom_policy,                     0,                                  offsetof(Scope, oom_policy)
+Scope.RuntimeDeadline,                   config_parse_timestamp,                      0,                                  offsetof(Scope, runtime_deadline)
 {# The [Install] section is ignored here #}
 Install.Alias,                           NULL,                                        0,                                  0
 Install.WantedBy,                        NULL,                                        0,                                  0

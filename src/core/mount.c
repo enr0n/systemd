@@ -213,7 +213,7 @@ static void mount_init(Unit *u) {
 static int mount_arm_timer(Mount *m, bool relative, usec_t usec) {
         assert(m);
 
-        return unit_arm_timer(UNIT(m), &m->timer_event_source, relative, usec, mount_dispatch_timer);
+        return unit_arm_timer(UNIT(m), &m->timer_event_source, relative, usec, mount_dispatch_timer, CLOCK_MONOTONIC);
 }
 
 static void mount_unwatch_control_pid(Mount *m) {

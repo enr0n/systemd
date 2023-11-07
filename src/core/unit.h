@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "sd-id128.h"
@@ -1035,7 +1036,7 @@ void unit_thawed(Unit *u);
 
 Condition *unit_find_failed_condition(Unit *u);
 
-int unit_arm_timer(Unit *u, sd_event_source **source, bool relative, usec_t usec, sd_event_time_handler_t handler);
+int unit_arm_timer(Unit *u, sd_event_source **source, bool relative, usec_t usec, sd_event_time_handler_t handler, clockid_t clock);
 
 int unit_compare_priority(Unit *a, Unit *b);
 

@@ -6388,7 +6388,8 @@ int unit_arm_timer(
                 sd_event_source **source,
                 bool relative,
                 usec_t usec,
-                sd_event_time_handler_t handler) {
+                sd_event_time_handler_t handler,
+                clockid_t clock) {
 
         int r;
 
@@ -6413,7 +6414,7 @@ int unit_arm_timer(
         r = (relative ? sd_event_add_time_relative : sd_event_add_time)(
                         u->manager->event,
                         source,
-                        CLOCK_MONOTONIC,
+                        clock,
                         usec, 0,
                         handler,
                         u);

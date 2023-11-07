@@ -133,6 +133,18 @@
 
         <xi:include href="version-info.xml" xpointer="v250"/></listitem>
       </varlistentry>
+
+      <varlistentry>
+        <term><varname>RuntimeDeadline=</varname></term>
+
+        <listitem><para>Configures a deadline for the scope to finish by. If this is used and the scope
+        is active at the specified deadline it is terminated and put into a failure state. Pass
+        a timestamp as specified in
+        <citerefentry><refentrytitle>systemd.time</refentrytitle><manvolnum>7</manvolnum></citerefentry>
+        to configure the deadline. Unset by default.</para>
+
+        <xi:include href="version-info.xml" xpointer="v256"/></listitem>
+      </varlistentry>
     </variablelist>
 
     <xi:include href="systemd.service.xml" xpointer="shared-unit-options" />

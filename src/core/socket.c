@@ -195,7 +195,7 @@ static void socket_done(Unit *u) {
 static int socket_arm_timer(Socket *s, bool relative, usec_t usec) {
         assert(s);
 
-        return unit_arm_timer(UNIT(s), &s->timer_event_source, relative, usec, socket_dispatch_timer);
+        return unit_arm_timer(UNIT(s), &s->timer_event_source, relative, usec, socket_dispatch_timer, CLOCK_MONOTONIC);
 }
 
 static bool have_non_accept_socket(Socket *s) {

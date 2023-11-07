@@ -249,6 +249,21 @@ static int bus_append_parse_sec_rename(sd_bus_message *m, const char *field, con
         return 1;
 }
 
+static int bus_append_parse_timestamp(sd_bus_message *m, const char *field, const char *eq) {
+        usec_t t;
+        int r;
+
+        r = parse_timestamp(eq, &t);
+        if (r < 0)
+                return log_error_errno(r, "Failed to parse %s=%s: %m", field, eq);
+
+        r = sd_bus_message_append(m, "(sv)", field, "t", t);
+        if (r < 0)
+                return bus_log_create_error(r);
+
+        return 1;
+}
+
 static int bus_append_parse_size(sd_bus_message *m, const char *field, const char *eq, uint64_t base) {
         uint64_t v;
         int r;
@@ -2282,6 +2297,9 @@ static int bus_append_scope_property(sd_bus_message *m, const char *field, const
 
         if (streq(field, "OOMPolicy"))
                 return bus_append_string(m, field, eq);
+
+        if (streq(field, "RuntimeDeadline"))
+                return bus_append_parse_timestamp(m, field, eq);
 
         return 0;
 }

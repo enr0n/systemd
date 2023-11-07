@@ -6405,6 +6405,7 @@ void unit_dump_config_items(FILE *f) {
                 { config_parse_personality,           "PERSONALITY" },
                 { config_parse_log_filter_patterns,   "REGEX" },
                 { config_parse_mount_node,            "NODE" },
+                { config_parse_timestamp,             "TIMESTAMP" },
         };
 
         const char *prev = NULL;

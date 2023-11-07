@@ -626,7 +626,7 @@ static usec_t service_running_timeout(Service *s) {
 static int service_arm_timer(Service *s, bool relative, usec_t usec) {
         assert(s);
 
-        return unit_arm_timer(UNIT(s), &s->timer_event_source, relative, usec, service_dispatch_timer);
+        return unit_arm_timer(UNIT(s), &s->timer_event_source, relative, usec, service_dispatch_timer, CLOCK_MONOTONIC);
 }
 
 static int service_verify(Service *s) {

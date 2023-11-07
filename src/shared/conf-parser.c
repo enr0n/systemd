@@ -872,6 +872,7 @@ DEFINE_PARSER(sec, usec_t, parse_sec);
 DEFINE_PARSER(sec_def_infinity, usec_t, parse_sec_def_infinity);
 DEFINE_PARSER(mode, mode_t, parse_mode);
 DEFINE_PARSER(pid, pid_t, parse_pid);
+DEFINE_PARSER(timestamp, usec_t, parse_timestamp);
 
 int config_parse_iec_size(
                 const char* unit,

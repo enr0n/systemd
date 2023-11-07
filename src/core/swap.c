@@ -180,7 +180,7 @@ static void swap_done(Unit *u) {
 static int swap_arm_timer(Swap *s, bool relative, usec_t usec) {
         assert(s);
 
-        return unit_arm_timer(UNIT(s), &s->timer_event_source, relative, usec, swap_dispatch_timer);
+        return unit_arm_timer(UNIT(s), &s->timer_event_source, relative, usec, swap_dispatch_timer, CLOCK_MONOTONIC);
 }
 
 static SwapParameters* swap_get_parameters(Swap *s) {
