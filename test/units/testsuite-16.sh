@@ -70,21 +70,21 @@ runtime_max_sec=5
 systemd-run \
     --property=RuntimeMaxSec=${runtime_max_sec}s \
     -u runtime-max-sec-test-1.service \
-    /usr/bin/sh -c "while true; do sleep 1; done"
+    /usr/bin/sleep infinity
 wait_for_timeout runtime-max-sec-test-1.service $((runtime_max_sec + 2))
 
 systemd-run \
     --property=RuntimeMaxSec=${runtime_max_sec}s \
     --scope \
     -u runtime-max-sec-test-2.scope \
-    /usr/bin/sh -c "while true; do sleep 1; done" &
+    /usr/bin/sleep infinity &
 wait_for_timeout runtime-max-sec-test-2.scope $((runtime_max_sec + 2))
 
 # These ensure that RuntimeMaxSec is honored for scope and service
 # units if the value is changed and then the manager is reloaded.
 systemd-run \
     -u runtime-max-sec-test-3.service \
-    /usr/bin/sh -c "while true; do sleep 1; done"
+    /usr/bin/sleep infinity
 mkdir -p /etc/systemd/system/runtime-max-sec-test-3.service.d/
 cat > /etc/systemd/system/runtime-max-sec-test-3.service.d/override.conf << EOF
 [Service]
@@ -96,12 +96,10 @@ wait_for_timeout runtime-max-sec-test-3.service $((runtime_max_sec + 2))
 systemd-run \
     --scope \
     -u runtime-max-sec-test-4.scope \
-    /usr/bin/sh -c "while true; do sleep 1; done" &
+    /usr/bin/sleep infinity &
 
 # Wait until the unit is running to avoid race with creating the override.
-until systemctl is-active runtime-max-sec-test-4.scope; do
-    sleep 1
-done
+timeout 30 bash -c "until systemctl is-active runtime-max-sec-test-4.scope; do sleep 1; done"
 mkdir -p /etc/systemd/system/runtime-max-sec-test-4.scope.d/
 cat > /etc/systemd/system/runtime-max-sec-test-4.scope.d/override.conf << EOF
 [Scope]
@@ -109,6 +107,46 @@ RuntimeMaxSec=${runtime_max_sec}s
 EOF
 systemctl daemon-reload
 wait_for_timeout runtime-max-sec-test-4.scope $((runtime_max_sec + 2))
+
+# Check that RuntimeDeadline works as well.
+systemd-run \
+    --property=RuntimeDeadline="$(date -d "now + $runtime_max_sec seconds" "+%H:%M:%S")" \
+    --scope \
+    -u runtime-deadline-test-1.scope \
+    /usr/bin/sleep infinity &
+wait_for_timeout runtime-deadline-test-1.scope $((runtime_max_sec + 2))
+
+systemd-run \
+    --property=RuntimeDeadline="$(date -d "now + $((3 * runtime_max_sec)) seconds" "+%H:%M:%S")" \
+    --property=RuntimeMaxSec=${runtime_max_sec}s \
+    --scope \
+    -u runtime-deadline-test-2.scope \
+    /usr/bin/sleep infinity &
+wait_for_timeout runtime-deadline-test-2.scope $((runtime_max_sec + 2))
+
+systemd-run \
+    --property=RuntimeDeadline="$(date -d "now + $runtime_max_sec seconds" "+%H:%M:%S")" \
+    --property=RuntimeMaxSec=$((3 * runtime_max_sec))s \
+    --scope \
+    -u runtime-deadline-test-3.scope \
+    /usr/bin/sleep infinity &
+wait_for_timeout runtime-deadline-test-3.scope $((runtime_max_sec + 2))
+
+systemd-run \
+    --scope \
+    -u runtime-deadline-test-4.scope \
+    /usr/bin/sleep infinity &
+
+# Wait until the unit is running to avoid race with creating the override.
+timeout 30 bash -c "until systemctl is-active runtime-deadline-test-4.scope; do sleep 1; done"
+mkdir -p /etc/systemd/system/runtime-deadline-test-4.scope.d/
+cat > /etc/systemd/system/runtime-deadline-test-4.scope.d/override.conf << EOF
+[Scope]
+RuntimeDeadline=$(date -d "now + $runtime_max_sec seconds" "+%H:%M:%S")
+
+EOF
+systemctl daemon-reload
+wait_for_timeout runtime-deadline-test-4.scope $((runtime_max_sec + 2))
 
 if [[ -f "$TESTLOG" ]]; then
     # no mv
