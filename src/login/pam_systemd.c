@@ -441,6 +441,25 @@ static int append_session_runtime_max_sec(pam_handle_t *handle, sd_bus_message *
         return PAM_SUCCESS;
 }
 
+static int append_session_runtime_deadline(pam_handle_t *handle, sd_bus_message *m, const char *limit) {
+        usec_t val;
+        int r;
+
+        /* No need to parse "infinity" here, it will be set by default later in scope_init() */
+        if (isempty(limit) || streq(limit, "infinity"))
+                return PAM_SUCCESS;
+
+        r = parse_timestamp(limit, &val);
+        if (r >= 0) {
+                r = sd_bus_message_append(m, "(sv)", "RuntimeDeadline", "t", (uint64_t) val);
+                if (r < 0)
+                        return pam_bus_log_create_error(handle, r);
+        } else
+                pam_syslog(handle, LOG_WARNING, "Failed to parse systemd.runtime_deadline: %s, ignoring.", limit);
+
+        return PAM_SUCCESS;
+}
+
 static int append_session_tasks_max(pam_handle_t *handle, sd_bus_message *m, const char *limit) {
         uint64_t val;
         int r;
@@ -815,6 +834,7 @@ typedef struct SessionContext {
         const char *cpu_weight;
         const char *io_weight;
         const char *runtime_max_sec;
+        const char *runtime_deadline;
 } SessionContext;
 
 static int create_session_message(
@@ -879,6 +899,10 @@ static int create_session_message(
         if (r != PAM_SUCCESS)
                 return r;
 
+        r = append_session_runtime_deadline(handle, m, context->runtime_deadline);
+        if (r != PAM_SUCCESS)
+                return r;
+
         r = append_session_tasks_max(handle, m, context->tasks_max);
         if (r != PAM_SUCCESS)
                 return r;
@@ -918,7 +942,8 @@ _public_ PAM_EXTERN int pam_sm_open_session(
                 *seat = NULL,
                 *type = NULL, *class = NULL,
                 *class_pam = NULL, *type_pam = NULL, *cvtnr = NULL, *desktop = NULL, *desktop_pam = NULL,
-                *memory_max = NULL, *tasks_max = NULL, *cpu_weight = NULL, *io_weight = NULL, *runtime_max_sec = NULL;
+                *memory_max = NULL, *tasks_max = NULL, *cpu_weight = NULL, *io_weight = NULL, *runtime_max_sec = NULL,
+                *runtime_deadline = NULL;
         uint64_t default_capability_bounding_set = UINT64_MAX, default_capability_ambient_set = UINT64_MAX;
         _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;
         _cleanup_(user_record_unrefp) UserRecord *ur = NULL;
@@ -1055,6 +1080,10 @@ _public_ PAM_EXTERN int pam_sm_open_session(
         if (!IN_SET(r, PAM_SUCCESS, PAM_NO_MODULE_DATA))
                 return pam_syslog_pam_error(handle, LOG_ERR, r, "Failed to get PAM systemd.runtime_max_sec data: @PAMERR@");
 
+        r = pam_get_data(handle, "systemd.runtime_deadline", (const void **)&runtime_deadline);
+        if (!IN_SET(r, PAM_SUCCESS, PAM_NO_MODULE_DATA))
+                return pam_syslog_pam_error(handle, LOG_ERR, r, "Failed to get PAM systemd.runtime_deadline data: @PAMERR@");
+
         /* Talk to logind over the message bus */
         r = pam_acquire_bus_connection(handle, "pam-systemd", &bus, &d);
         if (r != PAM_SUCCESS)
@@ -1070,8 +1099,8 @@ _public_ PAM_EXTERN int pam_sm_open_session(
                          yes_no(remote), strempty(remote_user), strempty(remote_host));
         pam_debug_syslog(handle, debug,
                          "Session limits: "
-                         "memory_max=%s tasks_max=%s cpu_weight=%s io_weight=%s runtime_max_sec=%s",
-                         strna(memory_max), strna(tasks_max), strna(cpu_weight), strna(io_weight), strna(runtime_max_sec));
+                         "memory_max=%s tasks_max=%s cpu_weight=%s io_weight=%s runtime_max_sec=%s runtime_deadline=%s",
+                         strna(memory_max), strna(tasks_max), strna(cpu_weight), strna(io_weight), strna(runtime_max_sec), strna(runtime_deadline));
 
         const SessionContext context = {
                 .uid = ur->uid,
@@ -1092,6 +1121,7 @@ _public_ PAM_EXTERN int pam_sm_open_session(
                 .cpu_weight = cpu_weight,
                 .io_weight = io_weight,
                 .runtime_max_sec = runtime_max_sec,
+                .runtime_deadline = runtime_deadline,
         };
 
         r = create_session_message(bus,
